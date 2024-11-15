@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wait Time Metrics</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f7;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #ffffff;
+            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15);
+            border-radius: 8px;
+        }
+        .back-btn {
+            display: block;
+            padding: 10px 20px;
+            font-size: 16px;
+            color: white;
+            background-color: #1a73e8;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: background-color 0.3s;
+        }
+        h1 {
+            font-size: 26px;
+            color: #1a73e8;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        h2 {
+            font-size: 20px;
+            color: #333333;
+            margin-top: 20px;
+            border-bottom: 2px solid #1a73e8;
+            padding-bottom: 5px;
+        }
+        input[type="file"] {
+            display: block;
+            margin: 20px auto;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #cfd8dc;
+            font-size: 14px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: #ffffff;
+        }
+        table, th, td {
+            border: 1px solid #cfd8dc;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #1a73e8;
+            color: white;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f5f7fa;
+        }
+    </style>
+</head>
+<body>
+    <a href="Main.html" class="back-btn">Back to Portal</a>
+
+<div class="container">
+    <h1>Wait Time Metrics</h1>
+    <input type="file" id="csvFileInput" accept=".csv" />
+    <div id="output"></div>
+</div>
+
+<script>
+    document.getElementById("csvFileInput").addEventListener("change", function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    processMetrics(results.data);
+                }
+            });
+        }
+    });
+
+    function processMetrics(data) {
+        console.log("Parsed Data:", data);
+
+        // Extract WaitingTime and CallbackReturnTime values
+        const waitingTimes = data
+            .map(row => ({
+                time: parseFloat(row["WaitingTime"] || "0"),
+                date: row["EndDate"] ? new Date(row["EndDate"]).toLocaleDateString() : null
+            }))
+            .filter(entry => !isNaN(entry.time) && entry.time > 0 && entry.date);
+
+        const callbackReturnTimes = data
+            .map(row => parseFloat(row["CallbackReturnTime"] || "0"))
+            .filter(val => !isNaN(val) && val > 0);
+
+        const callbackCounts = data
+            .map(row => parseInt(row["Callback"] || "0"))
+            .filter(val => !isNaN(val) && val > 0).length;
+
+        console.log("Parsed Waiting Times with Dates:", waitingTimes);
+        console.log("Parsed Callback Return Times (Seconds):", callbackReturnTimes);
+        console.log("Count of Callback Entries:", callbackCounts);
+
+        // Calculate Max Wait Time and Average Wait Time
+        const allWaitingTimes = waitingTimes.map(entry => entry.time);
+        const maxWaitTime = allWaitingTimes.length ? Math.max(...allWaitingTimes) / 60 : 0; // Convert to minutes
+        const avgWaitTime = allWaitingTimes.length
+            ? allWaitingTimes.reduce((sum, val) => sum + val, 0) / allWaitingTimes.length / 60 // Convert to minutes
+            : 0;
+
+        // Calculate Average Callback Return Time
+        const totalCallbackTime = callbackReturnTimes.reduce((sum, val) => sum + val, 0);
+        const avgCallbackReturnTime = callbackCounts > 0 ? (totalCallbackTime / callbackCounts) / 60 : 0;
+
+        console.log("Max Wait Time (Minutes):", maxWaitTime);
+        console.log("Average Wait Time (Minutes):", avgWaitTime);
+        console.log("Average Callback Return Time (Minutes):", avgCallbackReturnTime);
+
+        // Group waiting times by date
+        const groupedByDate = waitingTimes.reduce((acc, entry) => {
+            if (!acc[entry.date]) acc[entry.date] = [];
+            acc[entry.date].push(entry.time);
+            return acc;
+        }, {});
+
+        console.log("Grouped Waiting Times by Date:", groupedByDate);
+
+        // Find max wait time for each day
+        const dailyMaxTimes = Object.values(groupedByDate).map(times => Math.max(...times));
+        console.log("Daily Max Waiting Times (Seconds):", dailyMaxTimes);
+
+        // Calculate the average of daily max wait times (in minutes)
+        const avgDailyMaxTime = dailyMaxTimes.length
+            ? dailyMaxTimes.reduce((sum, val) => sum + val, 0) / dailyMaxTimes.length / 60 // Convert to minutes
+            : 0;
+
+        console.log("Average of Daily Max Wait Times (Minutes):", avgDailyMaxTime);
+
+        // Display metrics
+        displayMetrics({
+            maxWaitTime: maxWaitTime.toFixed(2),
+            avgDailyMaxWaitTime: avgDailyMaxTime.toFixed(2),
+            avgWaitTime: avgWaitTime.toFixed(2),
+            avgCallbackReturnTime: avgCallbackReturnTime.toFixed(2)
+        });
+    }
+
+    function displayMetrics(metrics) {
+        const output = document.getElementById("output");
+        output.innerHTML = `
+            <h2>Calculated Metrics</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Max Wait Time (Min)</th>
+                        <th>Average Daily Max Wait Time (Min)</th>
+                        <th>Average Wait Time (Min)</th>
+                        <th>Average Callback Return Time (Min)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>${metrics.maxWaitTime}</td>
+                        <td>${metrics.avgDailyMaxWaitTime}</td>
+                        <td>${metrics.avgWaitTime}</td>
+                        <td>${metrics.avgCallbackReturnTime}</td>
+                    </tr>
+                </tbody>
+            </table>
+        `;
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Activity Review</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f5f7;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 2000px;
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #ffffff;
+            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15);
+            border-radius: 8px;
+        }
+        h1 {
+            font-size: 26px;
+            color: #1a73e8;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        h2 {
+            font-size: 20px;
+            color: #333333;
+            margin-top: 20px;
+            border-bottom: 2px solid #1a73e8;
+            padding-bottom: 5px;
+            text-align: left;
+            width: 100%;
+        }
+        .back-btn {
+            display: block;
+            padding: 10px 20px;
+            font-size: 16px;
+            color: white;
+            background-color: #1a73e8;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: background-color 0.3s;
+        }
+        .filter-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        .filter-container label {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        .filter-container input[type="checkbox"] {
+            margin-right: 5px;
+        }
+        input[type="file"] {
+            display: block;
+            margin: 20px auto;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #cfd8dc;
+            font-size: 14px;
+        }
+        #output {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            background-color: #ffffff;
+        }
+        table, th, td {
+            border: 1px solid #cfd8dc;
+            padding: 10px;
+        }
+        th {
+            background-color: #1a73e8;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            position: relative;
+        }
+        th.sort-asc::after {
+            content: " ▲";
+            position: absolute;
+            right: 8px;
+        }
+        th.sort-desc::after {
+            content: " ▼";
+            position: absolute;
+            right: 8px;
+        }
+        td {
+            text-align: center;
+            font-size: 14px;
+        }
+        tr:nth-child(even) {
+            background-color: #f5f7fa;
+        }
+        .download-btn {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            color: white;
+            background-color: #1a73e8;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .download-btn:hover {
+            background-color: #155bb5;
+        }
+        
+        .highlighted {
+            background-color: #e3f2fd !important;
+            font-weight: bold;
+        }
+        .blurred {
+            filter: blur(5px);
+            pointer-events: none;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+
+<a href="Main.html" class="back-btn">Back to Portal</a>
+
+<div class="container">
+    <h1>Agent Activity Review</h1>
+    <div class="filter-container" id="filterContainer"></div>
+    <input type="file" id="csvFileInput" accept=".csv" />
+    <button id="downloadBtn" class="download-btn" style="display: none;">Download as Excel</button>
+    <div id="output"></div>
+</div>
+
+<!-- Include SheetJS library for Excel export functionality -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+<script>
+// Function to read the CSV file and process data
+document.getElementById("csvFileInput").addEventListener("change", function(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const text = e.target.result;
+            processCSVData(text);
+        };
+        reader.readAsText(file);
+    }
+});
+
+function processCSVData(csv) {
+    const rows = csv.trim().split("\n").map(row => row.split(",").map(cell => cell.replace(/['"]+/g, '').trim()));
+
+    const headers = rows[0].map(header => header.trim());
+    const data = rows.slice(1).map(row => {
+        return headers.reduce((obj, header, index) => {
+            const field = row[index]?.trim() || "0";
+            obj[header] = isNaN(field) ? field : parseFloat(field);
+            return obj;
+        }, {});
+    });
+
+    const aggregatedData = aggregateData(data);
+    const result = analyzeData(aggregatedData);
+    displayResults(result);
+    document.getElementById("downloadBtn").style.display = "block"; // Show download button after processing
+}
+
+function aggregateData(data) {
+    const aggregated = {};
+    
+    data.forEach(agent => {
+        const fullName = `${agent["FirstName"] || ""} ${agent["LastName"] || ""}`.trim();
+        const team = agent["TeamName"];
+        const key = `${fullName}_${team}`;
+
+        if (!aggregated[key]) {
+            aggregated[key] = { ...agent, FullName: fullName, TeamName: team, rowCount: 1 };
+            aggregated[key].TotalLogonTime = agent.TotalLogonTime || 0;
+            aggregated[key].TotalSecsOnBreak = agent.TotalSecsOnBreak || 0;
+            aggregated[key].TotalAdjustedLogonTime = (agent.TotalLogonTime || 0) - 3600; // Subtract 1 hour per row
+        } else {
+            const existing = aggregated[key];
+            existing.TotalSecsOnInboundCall += agent.TotalSecsOnInboundCall || 0;
+            existing.TotalSecsOnOutboundCall += agent.TotalSecsOnOutboundCall || 0;
+            existing.TotalSecsOnWrapup += agent.TotalSecsOnWrapup || 0;
+            existing.TotalSecsOnBreak += agent.TotalSecsOnBreak || 0;
+            existing.TotalLogonTime += agent.TotalLogonTime || 0;
+            existing.TotalCalls += agent.TotalCalls || 0;
+            existing.rowCount += 1;
+        }
+    });
+
+    Object.values(aggregated).forEach(agent => {
+        agent.TotalAdjustedLogonTime = agent.TotalLogonTime - (agent.rowCount * 3600); // Subtract 1 hour per original row
+    });
+
+    return Object.values(aggregated);
+}
+
+function analyzeData(data) {
+    return data.map(agent => {
+        const totalCallTime = parseFloat(agent.TotalSecsOnInboundCall || 0) + parseFloat(agent.TotalSecsOnOutboundCall || 0);
+        const adjustedLogonTime = agent.TotalAdjustedLogonTime;
+        const wrapUpTime = parseFloat(agent.TotalSecsOnWrapup || 0);
+        const originalBreakTime = parseFloat(agent.TotalSecsOnBreak || 0);
+        const exceededBreakTime = Math.max(0, originalBreakTime - (agent.rowCount * 3600));
+        const nonCallTime = wrapUpTime + exceededBreakTime;
+
+        const callTimePercent = adjustedLogonTime > 0 ? ((totalCallTime / adjustedLogonTime) * 100).toFixed(2) : "0";
+        const wrapUpPercent = adjustedLogonTime > 0 ? ((wrapUpTime / adjustedLogonTime) * 100).toFixed(2) : "0";
+        const exceededBreakPercent = adjustedLogonTime > 0 ? ((exceededBreakTime / adjustedLogonTime) * 100).toFixed(2) : "0";
+        const nonCallTimePercent = adjustedLogonTime > 0 ? ((nonCallTime / adjustedLogonTime) * 100).toFixed(2) : "0";
+
+        // Correctly calculate the missed opportunity based on (Total Calls / Call Time) * Non-Call Time
+        const averageCallsPerHour = agent.TotalCalls > 0 && totalCallTime > 0 ? agent.TotalCalls / (totalCallTime / 3600) : 0;
+        const missedOpportunity = Math.round(averageCallsPerHour * (nonCallTime / 3600));
+
+        return {
+            Username: agent.UserName || "Unknown",
+            FullName: agent.FullName,
+            TeamName: agent.TeamName,
+            OriginalLogonTimeHours: (agent.TotalLogonTime / 3600).toFixed(2),
+            AdjustedLogonTimeHours: (adjustedLogonTime / 3600).toFixed(2),
+            CallTimeHours: (totalCallTime / 3600).toFixed(2),
+            WrapUpTimeHours: (wrapUpTime / 3600).toFixed(2),
+            TotalBreakTimeHours: (originalBreakTime / 3600).toFixed(2),
+            ExceededBreakTimeHours: (exceededBreakTime / 3600).toFixed(2),
+            NonCallTimeHours: (nonCallTime / 3600).toFixed(2),
+            CallTimePercent: callTimePercent,
+            WrapUpPercent: wrapUpPercent,
+            ExceededBreakPercent: exceededBreakPercent,
+            NonCallTimePercent: nonCallTimePercent,
+            MainNonCallReason: exceededBreakTime > wrapUpTime ? "Break" : "Wrap-up",
+            TotalCalls: agent.TotalCalls || 0,
+            MissedOpportunity: missedOpportunity
+        };
+    });
+}
+
+function displayResults(results) {
+    const output = document.getElementById("output");
+    output.innerHTML = "";
+
+    const teams = Array.from(new Set(results.map(result => result.TeamName)));
+    
+    const filterContainer = document.getElementById("filterContainer");
+    filterContainer.innerHTML = "<label>Filter Teams:</label>";
+    teams.forEach(team => {
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = team;
+        checkbox.checked = true;
+        checkbox.addEventListener("change", filterTeams);
+        filterContainer.appendChild(checkbox);
+
+        const label = document.createElement("label");
+        label.textContent = team;
+        filterContainer.appendChild(checkbox);
+        filterContainer.appendChild(label);
+    });
+
+    teams.forEach(team => {
+        const teamSection = document.createElement("div");
+        teamSection.classList.add("team-section");
+        teamSection.setAttribute("data-team", team);
+
+        teamSection.innerHTML = `
+            <h2>${team}</h2>
+            <table class="resultsTable">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable(this, '${team}')">Username</th>
+                        <th onclick="sortTable(this, '${team}')">Full Name</th>
+                        <th onclick="sortTable(this, '${team}')">Original Logged Time (hrs)</th>
+                        <th onclick="sortTable(this, '${team}')">Adjusted Logon Time (hrs)</th>
+                        <th onclick="sortTable(this, '${team}')">Call Time (hrs)</th>
+                        <th onclick="sortTable(this, '${team}')">Wrap-Up Time (hrs)</th>
+                        <th onclick="sortTable(this, '${team}')">Total Break Time (hrs)</th>
+                        <th onclick="sortTable(this, '${team}')">Exceeded Break Time (hrs)</th>
+                        <th onclick="sortTable(this, '${team}')">Total Non-Call Time (hrs)</th>
+                        <th onclick="sortTable(this, '${team}')">Call Time (%)</th>
+                        <th onclick="sortTable(this, '${team}')">Wrap-Up (%)</th>
+                        <th onclick="sortTable(this, '${team}')">Exceeded Break (%)</th>
+                        <th onclick="sortTable(this, '${team}')">Non-Call Time (%)</th>
+                        <th onclick="sortTable(this, '${team}')">Total Calls</th>
+                        <th onclick="sortTable(this, '${team}')">Missed Opportunity</th>
+                        <th onclick="sortTable(this, '${team}')">Main Non-Call Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${results.filter(result => result.TeamName === team).map(result => `
+                        <tr onclick="toggleHighlight(this)">
+                            <td>${result.Username}</td>
+                            <td>${result.FullName}</td>
+                            <td>${result.OriginalLogonTimeHours}</td>
+                            <td>${result.AdjustedLogonTimeHours}</td>
+                            <td>${result.CallTimeHours}</td>
+                            <td>${result.WrapUpTimeHours}</td>
+                            <td>${result.TotalBreakTimeHours}</td>
+                            <td>${result.ExceededBreakTimeHours}</td>
+                            <td>${result.NonCallTimeHours}</td>
+                            <td>${result.CallTimePercent}%</td>
+                            <td>${result.WrapUpPercent}%</td>
+                            <td>${result.ExceededBreakPercent}%</td>
+                            <td>${result.NonCallTimePercent}%</td>
+                            <td>${result.TotalCalls}</td>
+                            <td>${result.MissedOpportunity}</td>
+                            <td>${result.MainNonCallReason}</td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        `;
+        output.appendChild(teamSection);
+    });
+}
+
+// Function to toggle visibility of teams based on selected checkboxes
+function filterTeams() {
+    const checkboxes = document.querySelectorAll('.filter-container input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        const teamSections = document.querySelectorAll(`.team-section[data-team="${checkbox.value}"]`);
+        teamSections.forEach(section => {
+            section.style.display = checkbox.checked ? 'block' : 'none';
+        });
+    });
+}
+
+// Sorting function for table columns
+function sortTable(header, team) {
+    const table = document.querySelector(`.team-section[data-team="${team}"] .resultsTable`);
+    const tbody = table.querySelector("tbody");
+    const rows = Array.from(tbody.rows);
+    const columnIndex = Array.from(header.parentNode.children).indexOf(header);
+
+    // Determine the current sort state
+    const isAscending = header.classList.contains("sort-asc");
+    const isDescending = header.classList.contains("sort-desc");
+
+    // Clear existing sort states on all headers
+    Array.from(header.parentNode.children).forEach(h => h.classList.remove("sort-asc", "sort-desc"));
+
+    // Toggle sort state: ascending -> descending -> none
+    if (!isAscending && !isDescending) {
+        header.classList.add("sort-asc");
+        rows.sort((a, b) => compareCells(a, b, columnIndex, true));
+    } else if (isAscending) {
+        header.classList.remove("sort-asc");
+        header.classList.add("sort-desc");
+        rows.sort((a, b) => compareCells(a, b, columnIndex, false));
+    } else {
+        header.classList.remove("sort-desc");
+        tbody.append(...rows); // Restore original order by appending rows back in initial order
+        return;
+    }
+
+    // Rebuild the table body with sorted rows
+    tbody.append(...rows);
+}
+
+// Helper function to compare table cells
+function compareCells(a, b, columnIndex, isAscending) {
+    const aText = a.cells[columnIndex].textContent.trim();
+    const bText = b.cells[columnIndex].textContent.trim();
+    const aValue = isNaN(aText) ? aText : parseFloat(aText);
+    const bValue = isNaN(bText) ? bText : parseFloat(bText);
+
+    return isAscending ? (aValue > bValue ? 1 : -1) : (aValue < bValue ? 1 : -1);
+}
+
+// Function to toggle highlight on click, blur other rows, and reset on re-click
+function toggleHighlight(row) {
+    const table = row.closest('table');
+    const rows = Array.from(table.getElementsByTagName('tr'));
+
+    // Check if the row is already highlighted
+    const isHighlighted = row.classList.contains('highlighted');
+
+    // Remove all highlights and blurs
+    rows.forEach(r => r.classList.remove('highlighted', 'blurred'));
+
+    // If the row was not highlighted, apply highlight and blur others
+    if (!isHighlighted) {
+        row.classList.add('highlighted');
+        rows.forEach(r => {
+            if (r !== row && r.rowIndex !== 0) { // Skip header row
+                r.classList.add('blurred');
+            }
+        });
+    }
+}
+
+// Download as Excel file with each team in a separate sheet
+document.getElementById("downloadBtn").addEventListener("click", function () {
+    const workbook = XLSX.utils.book_new(); // Create a new workbook
+
+    document.querySelectorAll('.resultsTable').forEach((table, index) => {
+        const teamName = document.querySelectorAll('h2')[index].innerText;
+        const worksheet = XLSX.utils.table_to_sheet(table); // Convert each table to a sheet
+        XLSX.utils.book_append_sheet(workbook, worksheet, teamName); // Append the sheet with the team name
+    });
+
+    XLSX.writeFile(workbook, "Agent_Activity_Analysis.xlsx");
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Call Time Analysis</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f5f7;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            padding: 20px;
+            background-color: #ffffff;
+            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15);
+            border-radius: 8px;
+            text-align: center;
+        }
+        h1 {
+            font-size: 26px;
+            color: #1a73e8;
+            margin-bottom: 20px;
+        }
+        h2 {
+            font-size: 20px;
+            color: #333333;
+            margin-top: 20px;
+            border-bottom: 2px solid #1a73e8;
+            padding-bottom: 5px;
+            text-align: center;
+        }
+        .output-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            background-color: #ffffff;
+        }
+        .output-table, th, td {
+            border: 1px solid #cfd8dc;
+            padding: 10px;
+            text-align: center;
+        }
+        .back-btn {
+            display: block;
+            padding: 10px 20px;
+            font-size: 16px;
+            color: white;
+            background-color: #1a73e8;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: background-color 0.3s;
+        }
+
+        th {
+            background-color: #1a73e8;
+            color: white;
+            font-weight: bold;
+        }
+        td {
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        td:hover {
+            background-color: #e0f7fa;
+        }
+        .upload-container {
+            margin-bottom: 20px;
+        }
+        input[type="file"] {
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #cfd8dc;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <a href="Main.html" class="back-btn">Back to Portal</a>
+
+<div class="container">
+    <h1>Agent Call Time Analysis</h1>
+    <div class="upload-container">
+        <input type="file" id="csvFileInput" accept=".csv" />
+    </div>
+    <div id="outputContainer">
+        <!-- Dynamic content will be added here -->
+    </div>
+</div>
+
+<script>
+// Function to read the CSV file and process data
+document.getElementById("csvFileInput").addEventListener("change", function(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const text = e.target.result;
+            processCSVData(text);
+        };
+        reader.readAsText(file);
+    }
+});
+
+function processCSVData(csv) {
+    const rows = csv.trim().split("\n").map(row => row.split(",").map(cell => cell.replace(/['"]/g, '').trim()));
+    const headers = rows[0];
+    const data = rows.slice(1).map(row => {
+        return headers.reduce((obj, header, index) => {
+            const field = row[index];
+            obj[header] = isNaN(field) ? field : parseFloat(field);
+            return obj;
+        }, {});
+    });
+
+    displayResults(data);
+}
+
+function displayResults(data) {
+    // Group data by TeamName
+    const teams = {};
+    data.forEach(record => {
+        const teamName = record["TeamName"] || "Unknown Team";
+        if (!teams[teamName]) {
+            teams[teamName] = [];
+        }
+        teams[teamName].push(record);
+    });
+
+    const outputContainer = document.getElementById("outputContainer");
+    outputContainer.innerHTML = ""; // Clear any previous content
+
+    // Process and display each team separately
+    Object.keys(teams).forEach(teamName => {
+        const teamData = teams[teamName];
+
+        let totalCallTimeSecs = 0;
+        let totalLogonTimeSecs = 0;
+        let totalBreakTimeSecs = 0;
+        let totalInboundCallSecs = 0;
+        let totalOutboundCallSecs = 0;
+        let inboundCallCount = 0;
+        let outboundCallCount = 0;
+        let totalMissedCallbacks = 0;
+        let totalMissedCalls = 0;
+
+        teamData.forEach(record => {
+            const inboundCallTime = parseFloat(record["TotalSecsOnInboundCall"]) || 0;
+            const outboundCallTime = parseFloat(record["TotalSecsOnOutboundCall"]) || 0;
+            const logonTime = parseFloat(record["TotalLogonTime"]) || 0;
+            const breakTime = parseFloat(record["TotalSecsOnBreak"]) || 0;
+            const avgInboundTime = parseFloat(record["AvgSecsOnInboundCall"]) || 0;
+            const avgOutboundTime = parseFloat(record["AvgSecsOnOutboundCall"]) || 0;
+            const missedCallbacks = parseFloat(record["TotalMissedCallbacks"]) || 0;
+            const missedCalls = parseFloat(record["TotalMissedCalls"]) || 0;
+
+            totalCallTimeSecs += inboundCallTime + outboundCallTime;
+            totalLogonTimeSecs += logonTime;
+            totalBreakTimeSecs += breakTime;
+
+            if (avgInboundTime > 0) {
+                totalInboundCallSecs += avgInboundTime;
+                inboundCallCount++;
+            }
+
+            if (avgOutboundTime > 0) {
+                totalOutboundCallSecs += avgOutboundTime;
+                outboundCallCount++;
+            }
+
+            totalMissedCallbacks += missedCallbacks;
+            totalMissedCalls += missedCalls;
+        });
+
+        // Convert seconds to minutes
+        const totalCallTimeMins = (totalCallTimeSecs / 60).toFixed(2);
+        const totalLogonTimeMins = (totalLogonTimeSecs / 60).toFixed(2);
+        
+        // Calculate Call Time vs Working Time in hours, factoring out total break time
+        const callTimeVsWorkingTimeHrs = (7.5 * (totalCallTimeSecs / 3600) / ((totalLogonTimeSecs - totalBreakTimeSecs) / 3600)).toFixed(2);
+
+        const avgInboundCallTimeMins = inboundCallCount > 0 ? (totalInboundCallSecs / inboundCallCount / 60).toFixed(2) : "0";
+        const avgOutboundCallTimeMins = outboundCallCount > 0 ? (totalOutboundCallSecs / outboundCallCount / 60).toFixed(2) : "0";
+        const totalAvgCallTimeMins = ((parseFloat(avgInboundCallTimeMins) + parseFloat(avgOutboundCallTimeMins)) / 2).toFixed(2);
+
+        // Create table for each team
+        const teamSection = document.createElement("div");
+        teamSection.innerHTML = `
+            <h2>${teamName}</h2>
+            <table class="output-table">
+                <thead>
+                    <tr>
+                        <th>Total Call Time (mins)</th>
+                        <th>Total Log On Time (mins)</th>
+                        <th>Call Time vs. Working Time (hrs)</th>
+                        <th>Total Missed Callbacks</th>
+                        <th>Total Missed Calls</th>
+                        <th>Average Inbound Call Time (mins)</th>
+                        <th>Average Outbound Call Time (mins)</th>
+                        <th>Total Average Call Time (mins)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="copyable-cell">${totalCallTimeMins}</td>
+                        <td class="copyable-cell">${totalLogonTimeMins}</td>
+                        <td class="copyable-cell">${callTimeVsWorkingTimeHrs}</td>
+                        <td class="copyable-cell">${totalMissedCallbacks}</td>
+                        <td class="copyable-cell">${totalMissedCalls}</td>
+                        <td class="copyable-cell">${avgInboundCallTimeMins}</td>
+                        <td class="copyable-cell">${avgOutboundCallTimeMins}</td>
+                        <td class="copyable-cell">${totalAvgCallTimeMins}</td>
+                    </tr>
+                </tbody>
+            </table>
+        `;
+        outputContainer.appendChild(teamSection);
+    });
+
+    // Add copy functionality to cells
+    document.querySelectorAll('.copyable-cell').forEach(cell => {
+        const originalText = cell.textContent;
+
+        cell.addEventListener('mouseenter', () => {
+            cell.setAttribute('data-original-text', cell.textContent);
+            cell.textContent = "Copy Value";
+        });
+        cell.addEventListener('mouseleave', () => {
+            cell.textContent = cell.getAttribute('data-original-text');
+        });
+        cell.addEventListener('click', () => {
+            navigator.clipboard.writeText(cell.getAttribute('data-original-text'))
+                .then(() => {
+                    cell.textContent = "Copied!";
+                    setTimeout(() => {
+                        cell.textContent = cell.getAttribute('data-original-text');
+                    }, 1000);
+                })
+                .catch(err => console.error("Failed to copy text: ", err));
+        });
+    });
+}
+</script>
+
+</body>
+</html>
