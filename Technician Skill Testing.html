@@ -282,10 +282,16 @@ function groupTechnicians(data) {
         const job = grouped[techKey].jobs[jobKey];
         job.rows.push(row);
 
-        if (row['Trainee Checked At'] && !row['Trainer Checked At']) {
-            job.status = 'outstanding';
-        } else if (row['Trainee Checked At'] && row['Trainer Checked At']) {
-            job.status = 'validated';
+        // Update job status based on row data
+        const allTraineeChecked = job.rows.every(r => r['Trainee Checked At']); // All rows must have Trainee Checked At
+        const allTrainerChecked = job.rows.every(r => r['Trainer Checked At']); // All rows must have Trainer Checked At
+
+        if (allTraineeChecked && !allTrainerChecked) {
+            job.status = 'outstanding'; // Mark as outstanding only if all rows have Trainee Checked At but not all have Trainer Checked At
+        } else if (allTraineeChecked && allTrainerChecked) {
+            job.status = 'validated'; // Mark as validated if all rows have both Trainee and Trainer Checked At
+        } else {
+            job.status = 'ignored'; // Mark as ignored if not all rows have Trainee Checked At
         }
     });
 
