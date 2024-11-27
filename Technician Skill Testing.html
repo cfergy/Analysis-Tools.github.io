@@ -93,12 +93,14 @@
         <button id="removeFilter">Remove Filters</button>
     </div>
 
-    <div id="results">
-        <p><strong># of Technicians with Skills Validated:</strong> <span id="validatedTechs">0</span></p>
-        <p><strong>Total # of Individual Skills Validated:</strong> <span id="validatedSkills">0</span></p>
-        <p><strong>Total # of Technicians with Outstanding Skills:</strong> <span id="outstandingTechs">0</span></p>
-        <p><strong>Total # of Outstanding Skills:</strong> <span id="outstandingSkills">0</span></p>
-    </div>
+<div id="results">
+    <p><strong># of Technicians with Skills Validated:</strong> <span id="validatedTechs">0</span></p>
+    <p><strong>Total # of Individual Skills Validated:</strong> <span id="validatedSkills">0</span></p>
+    <p><strong>Total # of Technicians with Outstanding Skills:</strong> <span id="outstandingTechs">0</span></p>
+    <p><strong>Total # of Outstanding Skills:</strong> <span id="outstandingSkills">0</span></p>
+    <p><strong>Average Time to Validate:</strong> <span id="averageValidationTime">0</span></p>
+</div>
+
     <table id="table">
 <thead>
     <tr>
@@ -147,23 +149,25 @@
             });
         });
 
-        document.getElementById('applyFilter').addEventListener('click', function() {
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
+document.getElementById('applyFilter').addEventListener('click', function() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
 
-            if (!startDate || !endDate) {
-                alert("Please select both start and end dates.");
-                return;
-            }
+    if (!startDate || !endDate) {
+        alert("Please select both start and end dates.");
+        return;
+    }
 
-            const filteredData = globalData.filter(row => {
-                const traineeDate = new Date(row['Trainee Checked At']);
-                return traineeDate >= new Date(startDate) && traineeDate <= new Date(endDate);
-            });
+    const filteredData = globalData.filter(row => {
+        const traineeDate = row['Trainee Checked At'] ? new Date(row['Trainee Checked At']) : null;
+        if (!traineeDate) return false; // Exclude rows without valid trainee timestamps
 
-            technicians = groupTechnicians(filteredData);
-            processCSVData(filteredData);
-        });
+        return traineeDate >= new Date(startDate) && traineeDate <= new Date(endDate);
+    });
+
+    technicians = groupTechnicians(filteredData);
+    processCSVData(filteredData); // Recalculate everything for filtered data
+});
 
         document.getElementById('removeFilter').addEventListener('click', function() {
             technicians = groupTechnicians(globalData); // Reset to full data
@@ -298,42 +302,74 @@ function groupTechnicians(data) {
     return grouped;
 }
 
+function calculateFilteredMetrics(filteredData) {
+    let validatedTechs = 0;
+    let validatedSkills = 0;
+    let totalValidationTime = 0; // Total time in milliseconds
+    let validatedJobsCount = 0; // Number of validated jobs
+
+    for (const techKey in technicians) {
+        const tech = technicians[techKey];
+        let hasValidated = false;
+
+        for (const jobKey in tech.jobs) {
+            const job = tech.jobs[jobKey];
+
+            if (job.status === 'validated') {
+                validatedSkills++;
+                hasValidated = true;
+                validatedJobsCount++;
+
+                // Find the final "Trainee Checked At" and "Trainer Checked At" timestamps
+                const traineeTimes = job.rows
+                    .map(row => row['Trainee Checked At'] ? new Date(row['Trainee Checked At']) : null)
+                    .filter(time => time !== null);
+
+                const trainerTimes = job.rows
+                    .map(row => row['Trainer Checked At'] ? new Date(row['Trainer Checked At']) : null)
+                    .filter(time => time !== null);
+
+                if (traineeTimes.length && trainerTimes.length) {
+                    const maxTraineeTime = Math.max(...traineeTimes.map(time => time.getTime()));
+                    const maxTrainerTime = Math.max(...trainerTimes.map(time => time.getTime()));
+
+                    // Add the difference to the total validation time
+                    totalValidationTime += maxTrainerTime - maxTraineeTime;
+                }
+            }
+        }
+
+        if (hasValidated) validatedTechs++;
+    }
+
+    // Calculate average validation time in milliseconds
+    const averageValidationTimeMs = validatedJobsCount > 0 
+        ? totalValidationTime / validatedJobsCount
+        : 0;
+
+    // Convert to days and hours
+    const days = Math.floor(averageValidationTimeMs / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((averageValidationTimeMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+    // Update top metrics in the DOM
+    document.getElementById('validatedTechs').textContent = validatedTechs;
+    document.getElementById('validatedSkills').textContent = validatedSkills;
+    document.getElementById('averageValidationTime').textContent = `${days} days ${hours} hours`;
+}
+
+
 function processCSVData(data) {
     // Update the table with the filtered data
     updateHTML(data);
 
-    // Calculate and update metrics for filtered data (top two metrics only)
-    function calculateFilteredMetrics(filteredData) {
-        let validatedTechs = 0;
-        let validatedSkills = 0;
+    // Calculate filtered metrics for the current data
+    calculateFilteredMetrics(data);
 
-        for (const techKey in technicians) {
-            const tech = technicians[techKey];
-            let hasValidated = false;
-
-            for (const jobKey in tech.jobs) {
-                const job = tech.jobs[jobKey];
-                if (job.status === 'validated') {
-                    validatedSkills++;
-                    hasValidated = true;
-                }
-            }
-
-            if (hasValidated) validatedTechs++;
-        }
-
-        // Update top two metrics in the DOM
-        document.getElementById('validatedTechs').textContent = validatedTechs;
-        document.getElementById('validatedSkills').textContent = validatedSkills;
-    }
-
-    calculateFilteredMetrics(data); // Use filtered data for top metrics
-    calculateGlobalMetrics(); // Use full data for bottom metrics
+    // Ensure global metrics (e.g., outstanding) remain unchanged
+    calculateGlobalMetrics();
 }
 
-    // Calculate and update metrics for full data (bottom two metrics)
 function calculateGlobalMetrics() {
-    // Regenerate technicians from the full dataset (globalData)
     const globalTechnicians = groupTechnicians(globalData);
 
     let outstandingTechs = 0;
@@ -345,6 +381,7 @@ function calculateGlobalMetrics() {
 
         for (const jobKey in tech.jobs) {
             const job = tech.jobs[jobKey];
+
             if (job.status === 'outstanding') {
                 outstandingSkills++;
                 hasOutstanding = true;
@@ -358,8 +395,6 @@ function calculateGlobalMetrics() {
     document.getElementById('outstandingTechs').textContent = outstandingTechs;
     document.getElementById('outstandingSkills').textContent = outstandingSkills;
 }
-
-
 
 function updateHTML(data) {
     const tbody = document.querySelector('#table tbody');
