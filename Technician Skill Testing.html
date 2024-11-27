@@ -100,13 +100,14 @@
         <p><strong>Total # of Outstanding Skills:</strong> <span id="outstandingSkills">0</span></p>
     </div>
     <table id="table">
-        <thead>
-            <tr>
-                <th>Employee Number</th>
-                <th>Skills Validated</th>
-                <th>Skills Outstanding</th>
-            </tr>
-        </thead>
+<thead>
+    <tr>
+        <th onclick="sortTable('employeeNumber')">Employee Number</th>
+        <th onclick="sortTable('employeeName')">Employee Name</th>
+        <th onclick="sortTable('validated')">Skills Validated</th>
+        <th onclick="sortTable('outstanding')">Skills Outstanding</th>
+    </tr>
+</thead>
         <tbody></tbody>
     </table>
 
@@ -169,6 +170,92 @@
             processCSVData(globalData);
         });
 
+let sortState = {
+    column: null,
+    direction: 'default' // Can be 'asc', 'desc', or 'default'
+};
+
+function sortTable(column) {
+    // Determine the new sort direction
+    if (sortState.column === column) {
+        if (sortState.direction === 'default') {
+            sortState.direction = 'asc';
+        } else if (sortState.direction === 'asc') {
+            sortState.direction = 'desc';
+        } else {
+            sortState.direction = 'default';
+        }
+    } else {
+        sortState.column = column;
+        sortState.direction = 'asc';
+    }
+
+    // Sort the table data
+    let sortedTechnicians = Object.values(technicians);
+
+    if (sortState.direction !== 'default') {
+        sortedTechnicians.sort((a, b) => {
+            let valA, valB;
+
+            switch (column) {
+                case 'employeeNumber':
+                    valA = a.id;
+                    valB = b.id;
+                    break;
+                case 'employeeName':
+                    valA = a.name.toLowerCase();
+                    valB = b.name.toLowerCase();
+                    break;
+                case 'validated':
+                    valA = Object.values(a.jobs).filter(job => job.status === 'validated').length;
+                    valB = Object.values(b.jobs).filter(job => job.status === 'validated').length;
+                    break;
+                case 'outstanding':
+                    valA = Object.values(a.jobs).filter(job => job.status === 'outstanding').length;
+                    valB = Object.values(b.jobs).filter(job => job.status === 'outstanding').length;
+                    break;
+                default:
+                    return 0;
+            }
+
+            if (valA < valB) return sortState.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sortState.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    } else {
+        sortedTechnicians = Object.values(technicians); // Reset to unsorted
+    }
+
+    // Rebuild the table with sorted data
+    rebuildTable(sortedTechnicians);
+}
+
+function rebuildTable(sortedTechnicians) {
+    const tbody = document.querySelector('#table tbody');
+    tbody.innerHTML = '';
+
+    sortedTechnicians.forEach(tech => {
+        let validated = 0;
+        let outstanding = 0;
+
+        for (const jobKey in tech.jobs) {
+            const job = tech.jobs[jobKey];
+            if (job.status === 'validated') validated++;
+            if (job.status === 'outstanding') outstanding++;
+        }
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><a href="#" onclick="showEmployeeDetails('${tech.id}')">${tech.id}</a></td>
+            <td>${tech.name}</td>
+            <td>${validated}</td>
+            <td>${outstanding}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+
 function groupTechnicians(data) {
     const grouped = {};
 
@@ -180,6 +267,7 @@ function groupTechnicians(data) {
 
         if (!grouped[techKey]) {
             grouped[techKey] = {
+                id: techKey, // Explicitly store the Employee Number
                 name: fullName || 'Unknown', // Use fullName, fallback to 'Unknown'
                 jobs: {}
             };
@@ -267,30 +355,31 @@ function calculateGlobalMetrics() {
 
 
 
-        function updateHTML(data) {
-            const tbody = document.querySelector('#table tbody');
-            tbody.innerHTML = '';
+function updateHTML(data) {
+    const tbody = document.querySelector('#table tbody');
+    tbody.innerHTML = '';
 
-            for (const techKey in technicians) {
-                const tech = technicians[techKey];
-                let validated = 0;
-                let outstanding = 0;
+    for (const techKey in technicians) {
+        const tech = technicians[techKey];
+        let validated = 0;
+        let outstanding = 0;
 
-                for (const jobKey in tech.jobs) {
-                    const job = tech.jobs[jobKey];
-                    if (job.status === 'validated') validated++;
-                    if (job.status === 'outstanding') outstanding++;
-                }
-
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td><a href="#" onclick="showEmployeeDetails('${techKey}')">${techKey}</a></td>
-                    <td>${validated}</td>
-                    <td>${outstanding}</td>
-                `;
-                tbody.appendChild(row);
-            }
+        for (const jobKey in tech.jobs) {
+            const job = tech.jobs[jobKey];
+            if (job.status === 'validated') validated++;
+            if (job.status === 'outstanding') outstanding++;
         }
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><a href="#" onclick="showEmployeeDetails('${techKey}')">${techKey}</a></td>
+            <td>${tech.name}</td>
+            <td>${validated}</td>
+            <td>${outstanding}</td>
+        `;
+        tbody.appendChild(row);
+    }
+}
 
         function showEmployeeDetails(techKey) {
             const tech = technicians[techKey];
