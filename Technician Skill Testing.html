@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technician Skills Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+        .upload-container {
+            margin-bottom: 20px;
+        }
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0, 0, 0, 0.5); /* Black with opacity */
+        }
+        .modal-content {
+            background-color: #fff;
+            margin: 15% auto; /* 15% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .filter-container {
+            margin-bottom: 10px;
+        }
+        .job-title {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .job-status {
+            margin-left: 5px;
+            font-style: italic;
+            color: gray;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        ul li {
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-btn">Back to Portal</a>
+
+    <h1>Technician Skills Tracker</h1>
+    <div class="upload-container">
+        <label for="csvFile">Upload CSV File:</label>
+        <input type="file" id="csvFile" accept=".csv">
+
+        <label for="startDate">Start Date:</label>
+        <input type="date" id="startDate">
+        <label for="endDate">End Date:</label>
+        <input type="date" id="endDate">
+        <button id="applyFilter">Apply Filter</button>
+        <button id="removeFilter">Remove Filters</button>
+    </div>
+
+    <div id="results">
+        <p><strong># of Technicians with Skills Validated:</strong> <span id="validatedTechs">0</span></p>
+        <p><strong>Total # of Individual Skills Validated:</strong> <span id="validatedSkills">0</span></p>
+        <p><strong>Total # of Technicians with Outstanding Skills:</strong> <span id="outstandingTechs">0</span></p>
+        <p><strong>Total # of Outstanding Skills:</strong> <span id="outstandingSkills">0</span></p>
+    </div>
+    <table id="table">
+        <thead>
+            <tr>
+                <th>Employee Number</th>
+                <th>Skills Validated</th>
+                <th>Skills Outstanding</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <!-- Modal for Employee Details -->
+    <div id="employeeModal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="closeModal">&times;</span>
+            <div class="filter-container">
+                <label for="modalFilter">Show:</label>
+                <select id="modalFilter">
+                    <option value="all">All</option>
+                    <option value="validated">Validated</option>
+                    <option value="outstanding">Outstanding</option>
+                    <option value="ignored">Ignored</option>
+                </select>
+            </div>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script>
+        let globalData = []; // Store original CSV data
+        let technicians = {}; // Grouped technicians data
+
+        document.getElementById('csvFile').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            Papa.parse(file, {
+                header: true,
+                complete: function(results) {
+                    globalData = results.data; // Save the original data
+                    technicians = groupTechnicians(globalData);
+                    processCSVData(globalData); // Process all data initially
+                }
+            });
+        });
+
+        document.getElementById('applyFilter').addEventListener('click', function() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            if (!startDate || !endDate) {
+                alert("Please select both start and end dates.");
+                return;
+            }
+
+            const filteredData = globalData.filter(row => {
+                const traineeDate = new Date(row['Trainee Checked At']);
+                return traineeDate >= new Date(startDate) && traineeDate <= new Date(endDate);
+            });
+
+            technicians = groupTechnicians(filteredData);
+            processCSVData(filteredData);
+        });
+
+        document.getElementById('removeFilter').addEventListener('click', function() {
+            technicians = groupTechnicians(globalData); // Reset to full data
+            processCSVData(globalData);
+        });
+
+function groupTechnicians(data) {
+    const grouped = {};
+
+    data.forEach(row => {
+        const techKey = row['Employee Number'];
+        const firstName = row['Firstname'] || ''; // Use Firstname field
+        const lastName = row['Lastname'] || '';   // Use Lastname field
+        const fullName = `${firstName} ${lastName}`.trim(); // Concatenate and trim
+
+        if (!grouped[techKey]) {
+            grouped[techKey] = {
+                name: fullName || 'Unknown', // Use fullName, fallback to 'Unknown'
+                jobs: {}
+            };
+        }
+
+        const jobKey = row['Job Training Title'];
+
+        if (!grouped[techKey].jobs[jobKey]) {
+            grouped[techKey].jobs[jobKey] = { rows: [], status: 'ignored' };
+        }
+
+        const job = grouped[techKey].jobs[jobKey];
+        job.rows.push(row);
+
+        if (row['Trainee Checked At'] && !row['Trainer Checked At']) {
+            job.status = 'outstanding';
+        } else if (row['Trainee Checked At'] && row['Trainer Checked At']) {
+            job.status = 'validated';
+        }
+    });
+
+    return grouped;
+}
+
+function processCSVData(data) {
+    // Update the table with the filtered data
+    updateHTML(data);
+
+    // Calculate and update metrics for filtered data (top two metrics only)
+    function calculateFilteredMetrics(filteredData) {
+        let validatedTechs = 0;
+        let validatedSkills = 0;
+
+        for (const techKey in technicians) {
+            const tech = technicians[techKey];
+            let hasValidated = false;
+
+            for (const jobKey in tech.jobs) {
+                const job = tech.jobs[jobKey];
+                if (job.status === 'validated') {
+                    validatedSkills++;
+                    hasValidated = true;
+                }
+            }
+
+            if (hasValidated) validatedTechs++;
+        }
+
+        // Update top two metrics in the DOM
+        document.getElementById('validatedTechs').textContent = validatedTechs;
+        document.getElementById('validatedSkills').textContent = validatedSkills;
+    }
+
+    calculateFilteredMetrics(data); // Use filtered data for top metrics
+    calculateGlobalMetrics(); // Use full data for bottom metrics
+}
+
+    // Calculate and update metrics for full data (bottom two metrics)
+function calculateGlobalMetrics() {
+    // Regenerate technicians from the full dataset (globalData)
+    const globalTechnicians = groupTechnicians(globalData);
+
+    let outstandingTechs = 0;
+    let outstandingSkills = 0;
+
+    for (const techKey in globalTechnicians) {
+        const tech = globalTechnicians[techKey];
+        let hasOutstanding = false;
+
+        for (const jobKey in tech.jobs) {
+            const job = tech.jobs[jobKey];
+            if (job.status === 'outstanding') {
+                outstandingSkills++;
+                hasOutstanding = true;
+            }
+        }
+
+        if (hasOutstanding) outstandingTechs++;
+    }
+
+    // Update bottom two metrics in the DOM
+    document.getElementById('outstandingTechs').textContent = outstandingTechs;
+    document.getElementById('outstandingSkills').textContent = outstandingSkills;
+}
+
+
+
+        function updateHTML(data) {
+            const tbody = document.querySelector('#table tbody');
+            tbody.innerHTML = '';
+
+            for (const techKey in technicians) {
+                const tech = technicians[techKey];
+                let validated = 0;
+                let outstanding = 0;
+
+                for (const jobKey in tech.jobs) {
+                    const job = tech.jobs[jobKey];
+                    if (job.status === 'validated') validated++;
+                    if (job.status === 'outstanding') outstanding++;
+                }
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><a href="#" onclick="showEmployeeDetails('${techKey}')">${techKey}</a></td>
+                    <td>${validated}</td>
+                    <td>${outstanding}</td>
+                `;
+                tbody.appendChild(row);
+            }
+        }
+
+        function showEmployeeDetails(techKey) {
+            const tech = technicians[techKey];
+            const modal = document.getElementById('employeeModal');
+            const modalContent = document.getElementById('modalContent');
+            const modalFilter = document.getElementById('modalFilter');
+
+            function renderJobs(filter = 'all') {
+                modalContent.innerHTML = `<h2>Employee ${techKey} Details - ${tech.name}</h2>`;
+                Object.keys(tech.jobs).forEach(jobKey => {
+                    const job = tech.jobs[jobKey];
+                    if (filter !== 'all' && job.status !== filter) return;
+
+                    const jobElement = document.createElement('div');
+                    jobElement.classList.add('job-title');
+                    jobElement.innerHTML = `
+                        ${jobKey} <span class="job-status">(${job.status})</span>
+                        <ul>
+                            ${job.rows
+                                .map(row => `
+                                    <li>
+                                        Trainee: ${row['Trainee Checked At'] || 'N/A'} - Trainer: ${row['Trainer Checked At'] || 'N/A'}
+                                    </li>
+                                `).join('')}
+                        </ul>
+                    `;
+                    modalContent.appendChild(jobElement);
+                });
+            }
+
+            modalFilter.onchange = () => renderJobs(modalFilter.value);
+            renderJobs(); // Initial render
+            modal.style.display = 'block';
+        }
+
+        document.getElementById('closeModal').onclick = function () {
+            document.getElementById('employeeModal').style.display = 'none';
+        };
+        window.onclick = function (event) {
+            const modal = document.getElementById('employeeModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        };
+    </script>
+</body>
+</html>
