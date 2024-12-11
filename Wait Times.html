@@ -132,9 +132,15 @@
             ? allWaitingTimes.reduce((sum, val) => sum + val, 0) / allWaitingTimes.length / 60 // Convert to minutes
             : 0;
 
-        // Calculate Average Callback Return Time
-        const totalCallbackTime = callbackReturnTimes.reduce((sum, val) => sum + val, 0);
-        const avgCallbackReturnTime = callbackCounts > 0 ? (totalCallbackTime / callbackCounts) / 60 : 0;
+// Calculate Average Callback Return Time
+const totalCallbackTime = callbackReturnTimes.reduce((sum, val) => sum + val, 0);
+const avgCallbackReturnTime = callbackCounts > 0 ? (totalCallbackTime / callbackCounts) / 60 : 0;
+
+// Calculate Average Hold Time
+const holdTimes = data
+    .map(row => parseFloat(row["SecondsOnHold"] || "0"))
+    .filter(val => !isNaN(val) && val > 0);
+const avgHoldTime = holdTimes.length ? holdTimes.reduce((sum, val) => sum + val, 0) / holdTimes.length / 60 : 0;
 
         console.log("Max Wait Time (Minutes):", maxWaitTime);
         console.log("Average Wait Time (Minutes):", avgWaitTime);
@@ -160,39 +166,42 @@
 
         console.log("Average of Daily Max Wait Times (Minutes):", avgDailyMaxTime);
 
-        // Display metrics
-        displayMetrics({
-            maxWaitTime: maxWaitTime.toFixed(2),
-            avgDailyMaxWaitTime: avgDailyMaxTime.toFixed(2),
-            avgWaitTime: avgWaitTime.toFixed(2),
-            avgCallbackReturnTime: avgCallbackReturnTime.toFixed(2)
-        });
+// Display metrics
+displayMetrics({
+    maxWaitTime: maxWaitTime.toFixed(2),
+    avgDailyMaxWaitTime: avgDailyMaxTime.toFixed(2),
+    avgWaitTime: avgWaitTime.toFixed(2),
+    avgCallbackReturnTime: avgCallbackReturnTime.toFixed(2),
+    avgHoldTime: avgHoldTime.toFixed(2)
+});
     }
 
-    function displayMetrics(metrics) {
-        const output = document.getElementById("output");
-        output.innerHTML = `
-            <h2>Calculated Metrics</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Max Wait Time (Min)</th>
-                        <th>Average Daily Max Wait Time (Min)</th>
-                        <th>Average Wait Time (Min)</th>
-                        <th>Average Callback Return Time (Min)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>${metrics.maxWaitTime}</td>
-                        <td>${metrics.avgDailyMaxWaitTime}</td>
-                        <td>${metrics.avgWaitTime}</td>
-                        <td>${metrics.avgCallbackReturnTime}</td>
-                    </tr>
-                </tbody>
-            </table>
-        `;
-    }
+function displayMetrics(metrics) {
+    const output = document.getElementById("output");
+    output.innerHTML = `
+        <h2>Calculated Metrics</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Max Wait Time (Min)</th>
+                    <th>Average Daily Max Wait Time (Min)</th>
+                    <th>Average Wait Time (Min)</th>
+                    <th>Average Callback Return Time (Min)</th>
+                    <th>Average Hold Time (Min)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>${metrics.maxWaitTime}</td>
+                    <td>${metrics.avgDailyMaxWaitTime}</td>
+                    <td>${metrics.avgWaitTime}</td>
+                    <td>${metrics.avgCallbackReturnTime}</td>
+                    <td>${metrics.avgHoldTime}</td>
+                </tr>
+            </tbody>
+        </table>
+    `;
+}
 </script>
 
 </body>
