@@ -99,6 +99,8 @@
     <p><strong>Total # of Technicians with Outstanding Skills:</strong> <span id="outstandingTechs">0</span></p>
     <p><strong>Total # of Outstanding Skills:</strong> <span id="outstandingSkills">0</span></p>
     <p><strong>Average Time to Validate:</strong> <span id="averageValidationTime">0</span></p>
+    <p><strong>Average Time to Validate (Fast Lane):</strong> <span id="fastLaneValidationTime">0</span></p>
+    <p><strong>Average Time to Validate (Heavy Lane):</strong> <span id="heavyLaneValidationTime">0</span></p>
 </div>
 
     <table id="table">
@@ -132,6 +134,15 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script>
+const fastLaneJobs = [171854, 171855, 171856, 171857, 171858, 171859, 171860, 171861, 
+    171862, 171863, 171864, 171865, 172583, 172585, 172586, 172604, 172605, 172607, 
+    175844, 175845, 175846, 175847, 175848, 175849, 175850, 175851, 175852, 175853, 
+    176520, 184093, 184098];
+
+const heavyLaneJobs = [172145, 172146, 172243, 172246, 172249, 172250, 172331, 172355, 
+    172574, 172576, 172579, 172581, 175840, 175841, 175842, 175843, 184089, 184090, 
+    184091, 184092, 184094, 184095, 184096, 184097, 184451];
+
         let globalData = []; // Store original CSV data
         let technicians = {}; // Grouped technicians data
 
@@ -178,6 +189,51 @@ let sortState = {
     column: null,
     direction: 'default' // Can be 'asc', 'desc', or 'default'
 };
+
+function calculateLaneValidationTimes() {
+    let fastLaneTime = 0, heavyLaneTime = 0;
+    let fastLaneCount = 0, heavyLaneCount = 0;
+
+    for (const techKey in technicians) {
+        const tech = technicians[techKey];
+
+        for (const jobKey in tech.jobs) {
+            const job = tech.jobs[jobKey];
+            const jobId = parseInt(job.rows[0]['Job Training Id']);
+
+            if (job.status === 'validated') {
+                const traineeTimes = job.rows.map(row => row['Trainee Checked At'] ? new Date(row['Trainee Checked At']) : null).filter(time => time);
+                const trainerTimes = job.rows.map(row => row['Trainer Checked At'] ? new Date(row['Trainer Checked At']) : null).filter(time => time);
+
+                if (traineeTimes.length && trainerTimes.length) {
+                    const maxTraineeTime = Math.max(...traineeTimes.map(time => time.getTime()));
+                    const maxTrainerTime = Math.max(...trainerTimes.map(time => time.getTime()));
+                    const validationTime = maxTrainerTime - maxTraineeTime;
+
+                    if (fastLaneJobs.includes(jobId)) {
+                        fastLaneTime += validationTime;
+                        fastLaneCount++;
+                    } else if (heavyLaneJobs.includes(jobId)) {
+                        heavyLaneTime += validationTime;
+                        heavyLaneCount++;
+                    }
+                }
+            }
+        }
+    }
+
+    const avgFastLaneTime = fastLaneCount > 0 ? fastLaneTime / fastLaneCount : 0;
+    const avgHeavyLaneTime = heavyLaneCount > 0 ? heavyLaneTime / heavyLaneCount : 0;
+
+    document.getElementById('fastLaneValidationTime').textContent = formatTime(avgFastLaneTime);
+    document.getElementById('heavyLaneValidationTime').textContent = formatTime(avgHeavyLaneTime);
+}
+
+function formatTime(milliseconds) {
+    const days = Math.floor(milliseconds / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((milliseconds % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    return `${days} days ${hours} hours`;
+}
 
 function sortTable(column) {
     // Determine the new sort direction
@@ -359,14 +415,10 @@ function calculateFilteredMetrics(filteredData) {
 
 
 function processCSVData(data) {
-    // Update the table with the filtered data
     updateHTML(data);
-
-    // Calculate filtered metrics for the current data
     calculateFilteredMetrics(data);
-
-    // Ensure global metrics (e.g., outstanding) remain unchanged
     calculateGlobalMetrics();
+    calculateLaneValidationTimes();
 }
 
 function calculateGlobalMetrics() {
