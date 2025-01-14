@@ -106,6 +106,7 @@
     <table id="table">
 <thead>
     <tr>
+	<th onclick="sortTable('location')">Location</th>
         <th onclick="sortTable('employeeNumber')">Employee Number</th>
         <th onclick="sortTable('employeeName')">Employee Name</th>
         <th onclick="sortTable('validated')">Skills Validated</th>
@@ -134,9 +135,14 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script>
-const fastLaneJobs = [171854, 171855, 171856, 171857, 171858, 171859, 171860, 171861, 171862, 171863, 171864, 171865, 172583, 172585, 172586, 172604, 172605, 172607, 172610, 172611, 172613, 172614, 172615, 172682, 172683, 172684, 172686, 172687, 172688, 172689, 172690, 172701, 172703, 172705, 172707, 172708, 172709, 172710, 172712, 175572, 175576, 175577, 175578, 175582, 175583, 175596, 175613, 175614, 175617, 175618, 175619, 175631, 175646, 175670, 175672, 175680, 175686, 175688, 175690, 175695, 175697, 175700, 175705, 175720, 175721, 175730, 175734, 175735, 175736, 175738, 175739, 175742, 175743, 175744, 175745, 175758, 175759, 175767, 175771, 175772, 175773, 175779, 175782, 175783, 175789, 175790, 175791, 175792, 175793, 175795, 175798, 175810, 175812, 175813, 175814, 175816, 175818, 175820, 175821, 175822, 175823, 175831, 175834, 175835, 175838, 175844, 175845, 175846, 175847, 175848, 175849, 175850, 175851, 175852, 175853, 176520, 184093, 184098, 175510];
+const fastLaneJobs = [171854, 171855, 171856, 171857, 171858, 171859, 171860, 171861, 
+    171862, 171863, 171864, 171865, 172583, 172585, 172586, 172604, 172605, 172607, 
+    175844, 175845, 175846, 175847, 175848, 175849, 175850, 175851, 175852, 175853, 
+    176520, 184093, 184098];
 
-const heavyLaneJobs = [172145, 172146, 172243, 172246, 172249, 172250, 172331, 172355, 172574, 172576, 172579, 172581, 172676, 172678, 172714, 172716, 175570, 175571, 175573, 175575, 175579, 175581, 175590, 175592, 175593, 175594, 175599, 175607, 175608, 175609, 175611, 175612, 175620, 175622, 175624, 175625, 175627, 175629, 175630, 175633, 175635, 175641, 175643, 175647, 175649, 175650, 175659, 175662, 175664, 175665, 175666, 175667, 175692, 175701, 175703, 175704, 175709, 175710, 175711, 175713, 175718, 175722, 175724, 175725, 175726, 175727, 175729, 175740, 175761, 175763, 175768, 175770, 175775, 175776, 175780, 175781, 175784, 175785, 175786, 175787, 175788, 175794, 175796, 175797, 175799, 175801, 175802, 175803, 175804, 175805, 175806, 175807, 175808, 175809, 175811, 175815, 175817, 175819, 175824, 175825, 175826, 175827, 175828, 175829, 175830, 175832, 175833, 175836, 175837, 175839, 175840, 175841, 175842, 175843, 184089, 184090, 184091, 184092, 184094, 184095, 184096, 184097, 184451];
+const heavyLaneJobs = [172145, 172146, 172243, 172246, 172249, 172250, 172331, 172355, 
+    172574, 172576, 172579, 172581, 175840, 175841, 175842, 175843, 184089, 184090, 
+    184091, 184092, 184094, 184095, 184096, 184097, 184451];
 
         let globalData = []; // Store original CSV data
         let technicians = {}; // Grouped technicians data
@@ -194,7 +200,7 @@ function calculateLaneValidationTimes() {
 
         for (const jobKey in tech.jobs) {
             const job = tech.jobs[jobKey];
-            const jobId = parseInt(job.rows[0]['Job Training Id']);
+            const jobId = parseInt(jobKey);
 
             if (job.status === 'validated') {
                 const traineeTimes = job.rows.map(row => row['Trainee Checked At'] ? new Date(row['Trainee Checked At']) : null).filter(time => time);
@@ -253,6 +259,10 @@ function sortTable(column) {
             let valA, valB;
 
             switch (column) {
+                case 'location':
+                    valA = a.division.toLowerCase();
+                    valB = b.division.toLowerCase();
+                    break;
                 case 'employeeNumber':
                     valA = a.id;
                     valB = b.id;
@@ -285,6 +295,7 @@ function sortTable(column) {
     rebuildTable(sortedTechnicians);
 }
 
+
 function rebuildTable(sortedTechnicians) {
     const tbody = document.querySelector('#table tbody');
     tbody.innerHTML = '';
@@ -299,8 +310,12 @@ function rebuildTable(sortedTechnicians) {
             if (job.status === 'outstanding') outstanding++;
         }
 
+        // Use the stored division value
+        const location = tech.division;
+
         const row = document.createElement('tr');
         row.innerHTML = `
+            <td>${location}</td>
             <td><a href="#" onclick="showEmployeeDetails('${tech.id}')">${tech.id}</a></td>
             <td>${tech.name}</td>
             <td>${validated}</td>
@@ -316,14 +331,16 @@ function groupTechnicians(data) {
 
     data.forEach(row => {
         const techKey = row['Employee Number'];
-        const firstName = row['Firstname'] || ''; // Use Firstname field
-        const lastName = row['Lastname'] || '';   // Use Lastname field
-        const fullName = `${firstName} ${lastName}`.trim(); // Concatenate and trim
+        const firstName = row['Firstname'] || ''; 
+        const lastName = row['Lastname'] || '';  
+        const fullName = `${firstName} ${lastName}`.trim();
 
         if (!grouped[techKey]) {
+            const division = row['Division'] ? row['Division'].replace('Division -', '').trim() : 'Unknown';
             grouped[techKey] = {
-                id: techKey, // Explicitly store the Employee Number
-                name: fullName || 'Unknown', // Use fullName, fallback to 'Unknown'
+                id: techKey,
+                name: fullName || 'Unknown',
+                division: division,
                 jobs: {}
             };
         }
@@ -334,20 +351,17 @@ function groupTechnicians(data) {
             grouped[techKey].jobs[jobKey] = { rows: [], status: 'ignored' };
         }
 
-        const job = grouped[techKey].jobs[jobKey];
-        job.rows.push(row);
+        grouped[techKey].jobs[jobKey].rows.push(row);
 
-        // Update job status based on row data
-        const allTraineeChecked = job.rows.every(r => r['Trainee Checked At']); // All rows must have Trainee Checked At
-        const allTrainerChecked = job.rows.every(r => r['Trainer Checked At']); // All rows must have Trainer Checked At
+        // Determine the job's status
+        const allTraineeChecked = grouped[techKey].jobs[jobKey].rows.every(r => r['Trainee Checked At']);
+        const allTrainerChecked = grouped[techKey].jobs[jobKey].rows.every(r => r['Trainer Checked At']);
 
-        if (allTraineeChecked && !allTrainerChecked) {
-            job.status = 'outstanding'; // Mark as outstanding only if all rows have Trainee Checked At but not all have Trainer Checked At
-        } else if (allTraineeChecked && allTrainerChecked) {
-            job.status = 'validated'; // Mark as validated if all rows have both Trainee and Trainer Checked At
-        } else {
-            job.status = 'ignored'; // Mark as ignored if not all rows have Trainee Checked At
-        }
+if (allTrainerChecked) {
+    grouped[techKey].jobs[jobKey].status = 'validated'; // Handles both cases where all Trainer Checked At fields are filled
+} else if (allTraineeChecked) {
+    grouped[techKey].jobs[jobKey].status = 'outstanding'; // Handles cases where only Trainee Checked At fields are filled
+}
     });
 
     return grouped;
@@ -371,7 +385,7 @@ function calculateFilteredMetrics(filteredData) {
                 hasValidated = true;
                 validatedJobsCount++;
 
-                // Find the final "Trainee Checked At" and "Trainer Checked At" timestamps
+                // Only calculate time for rows with both timestamps
                 const traineeTimes = job.rows
                     .map(row => row['Trainee Checked At'] ? new Date(row['Trainee Checked At']) : null)
                     .filter(time => time !== null);
@@ -384,7 +398,6 @@ function calculateFilteredMetrics(filteredData) {
                     const maxTraineeTime = Math.max(...traineeTimes.map(time => time.getTime()));
                     const maxTrainerTime = Math.max(...trainerTimes.map(time => time.getTime()));
 
-                    // Add the difference to the total validation time
                     totalValidationTime += maxTrainerTime - maxTraineeTime;
                 }
             }
@@ -458,8 +471,12 @@ function updateHTML(data) {
             if (job.status === 'outstanding') outstanding++;
         }
 
+        // Use the stored division value
+        const location = tech.division;
+
         const row = document.createElement('tr');
         row.innerHTML = `
+            <td>${location}</td>
             <td><a href="#" onclick="showEmployeeDetails('${techKey}')">${techKey}</a></td>
             <td>${tech.name}</td>
             <td>${validated}</td>
@@ -467,7 +484,11 @@ function updateHTML(data) {
         `;
         tbody.appendChild(row);
     }
+
+    // Update metrics
+    calculateFilteredMetrics(data);
 }
+
 
         function showEmployeeDetails(techKey) {
             const tech = technicians[techKey];
