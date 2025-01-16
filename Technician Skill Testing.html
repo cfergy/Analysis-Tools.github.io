@@ -93,6 +93,14 @@
         <button id="removeFilter">Remove Filters</button>
     </div>
 
+<div class="filter-container">
+    <label for="locationFilter">Filter by Location:</label>
+    <select id="locationFilter">
+        <option value="all">All Locations</option>
+    </select>
+</div>
+
+
 <div id="results">
     <p><strong># of Technicians with Skills Validated:</strong> <span id="validatedTechs">0</span></p>
     <p><strong>Total # of Individual Skills Validated:</strong> <span id="validatedSkills">0</span></p>
@@ -145,14 +153,15 @@ const heavyLaneJobs = [172145, 172146, 172243, 172246, 172249, 172250, 172331, 1
             const file = event.target.files[0];
             if (!file) return;
 
-            Papa.parse(file, {
-                header: true,
-                complete: function(results) {
-                    globalData = results.data; // Save the original data
-                    technicians = groupTechnicians(globalData);
-                    processCSVData(globalData); // Process all data initially
-                }
-            });
+Papa.parse(file, {
+    header: true,
+    complete: function (results) {
+        globalData = results.data; // Save the original data
+        technicians = groupTechnicians(globalData);
+        populateLocationFilter(globalData); // Populate the location filter
+        processCSVData(globalData); // Process all data initially
+    }
+});
         });
 
 document.getElementById('applyFilter').addEventListener('click', function() {
@@ -468,6 +477,39 @@ function updateHTML(data) {
         tbody.appendChild(row);
     }
 }
+
+
+
+
+// Populate location dropdown with unique locations from the data
+function populateLocationFilter(data) {
+    const locationFilter = document.getElementById('locationFilter');
+    const uniqueLocations = [...new Set(data.map(row => row['Division'] || 'Unknown'))]; // Get unique locations
+    uniqueLocations.sort(); // Sort alphabetically
+
+    // Add options to the dropdown
+    locationFilter.innerHTML = '<option value="all">All Locations</option>'; // Reset dropdown
+    uniqueLocations.forEach(location => {
+        const option = document.createElement('option');
+        option.value = location;
+        option.textContent = location;
+        locationFilter.appendChild(option);
+    });
+}
+
+// Filter data by selected location
+document.getElementById('locationFilter').addEventListener('change', function () {
+    const selectedLocation = this.value;
+
+    const filteredData = selectedLocation === 'all'
+        ? globalData // If "All Locations" is selected, show all data
+        : globalData.filter(row => (row['Division'] || 'Unknown') === selectedLocation);
+
+    technicians = groupTechnicians(filteredData);
+    processCSVData(filteredData);
+});
+
+
 
         function showEmployeeDetails(techKey) {
             const tech = technicians[techKey];
